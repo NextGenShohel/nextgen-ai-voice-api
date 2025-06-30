@@ -1,22 +1,28 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse
+import uuid, tempfile, soundfile as sf, numpy as np, noisereduce as nr
 from gtts import gTTS
-import subprocess, uuid, pathlib
 
 api = FastAPI()
-TMP = pathlib.Path("/tmp")
 
 @api.post("/enhance")
 async def enhance(file: UploadFile = File(...)):
-    raw = TMP/f"{uuid.uuid4()}.wav"
-    enh = TMP/f"{uuid.uuid4()}_clean.wav"
-    raw.write_bytes(await file.read())
-    subprocess.run(["ffmpeg","-y","-i",raw,"-ar","16000","-ac","1",raw], check=True)
-    subprocess.run(["/opt/rnnoise/examples/rnnoise_demo",raw,enh], check=True)
-    return FileResponse(enh, media_type="audio/wav", filename="enhanced.wav")
+    # ইনপুট WAV পড়া
+    raw = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    raw.write(await file.read()); raw.close()
+
+    # ডেটা ও স্যাম্পল রেট লোড
+    data, sr = sf.read(raw.name)
+    # প্রথম ½ সেকেন্ডকে noise হিসেবে ধরা
+    reduced = nr.reduce_noise(y=data, sr=sr, y_noise=data[:sr//2])
+
+    # আউটপুট ফাইল
+    out_path = raw.name.replace(".wav", "_clean.wav")
+    sf.write(out_path, reduced.astype(np.float32), sr)
+    return FileResponse(out_path, media_type="audio/wav", filename="enhanced.wav")
 
 @api.post("/tts")
 async def tts(text: str = Form(...)):
-    mp3 = TMP/f"{uuid.uuid4()}.mp3"
-    gTTS(text=text, lang="bn").save(mp3)
-    return FileResponse(mp3, media_type="audio/mpeg", filename="bn_tts.mp3")
+    mp3_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
+    gTTS(text=text, lang="bn").save(mp3_path)
+    return FileResponse(mp3_path, media_type="audio/mpeg", filename="bn_tts.mp3")
