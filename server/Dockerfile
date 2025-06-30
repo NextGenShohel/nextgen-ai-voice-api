@@ -1,14 +1,28 @@
-FROM python:3.12-slim
+FROM python:3.10-slim
 
-RUN apt-get update -y && apt-get install -y ffmpeg git autoconf automake libtool build-essential
+# Update & install system dependencies
+RUN apt-get update -y && apt-get install -y \
+    ffmpeg git autoconf automake libtool pkg-config build-essential \
+ && rm -rf /var/lib/apt/lists/*
 
-COPY server/requirements.txt /tmp
-RUN pip install -r /tmp/requirements.txt
-
+# Clone and build rnnoise from old commit (has autogen.sh)
 RUN git clone https://github.com/xiph/rnnoise.git /opt/rnnoise \
- && cd /opt/rnnoise && ./autogen.sh && ./configure && make
+ && cd /opt/rnnoise \
+ && git checkout 7d56d1bf1e4c49aba2d3393e2f4f20413a5e6204 \
+ && ./autogen.sh && ./configure --enable-shared=no && make \
+ && cp .libs/librnnoise.a /usr/local/lib/ && cp src/rnnoise.h /usr/local/include/
 
-COPY server/app /app
+# Set working directory
 WORKDIR /app
 
-CMD ["uvicorn", "main:api", "--host", "0.0.0.0", "--port", "8080"]
+# Copy app code to container
+COPY . /app
+
+# Install Python dependencies
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Expose port
+EXPOSE 8000
+
+# Run FastAPI with Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
