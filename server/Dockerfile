@@ -1,25 +1,27 @@
 FROM python:3.10-slim
 
 # ---------- system deps ----------
-RUN apt-get update -y && apt-get install -y \
-    ffmpeg curl autoconf automake libtool pkg-config build-essential \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -y && \
+    apt-get install -y ffmpeg curl autoconf automake libtool \
+        pkg-config build-essential && \
+    rm -rf /var/lib/apt/lists/*
 
 # ---------- build rnnoise ----------
 WORKDIR /opt
-# সরাসরি tarball ডাউনলোড (সুইচ গিট সমস্যা বাদ)
-ADD https://github.com/xiph/rnnoise/archive/refs/tags/v0.4.tar.gz rnnoise.tar.gz
-RUN tar -xzf rnnoise.tar.gz && \
-    cd rnnoise-0.4 && \
+RUN curl -L -o rnnoise.tar.gz \
+    https://github.com/xiph/rnnoise/archive/refs/heads/master.tar.gz && \
+    tar -xzf rnnoise.tar.gz && \
+    cd rnnoise-master && \
     ./autogen.sh && ./configure --enable-shared=no && make && \
-    cp .libs/librnnoise.a /usr/local/lib/ && cp src/rnnoise.h /usr/local/include/
+    cp .libs/librnnoise.a /usr/local/lib/ && \
+    cp src/rnnoise.h /usr/local/include/
 
 # ---------- python ----------
 WORKDIR /app
 COPY server/requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip && pip install -r /app/requirements.txt
 
-# ---------- copy app ----------
+# ---------- app code ----------
 COPY server/app /app/app
 
 EXPOSE 8000
