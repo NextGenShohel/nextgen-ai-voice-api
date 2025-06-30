@@ -1,29 +1,12 @@
 FROM python:3.10-slim
 
-# System dependencies
-RUN apt-get update -y && apt-get install -y \
-    ffmpeg curl autoconf automake libtool pkg-config build-essential unzip \
- && rm -rf /var/lib/apt/lists/*
+# only basic tools
+RUN apt-get update -y && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-# Download and build rnnoise from v0.4 release
-WORKDIR /opt
-RUN curl -L -o rnnoise.zip https://github.com/xiph/rnnoise/archive/refs/tags/v0.4.zip && \
-    unzip rnnoise.zip && \
-    cd rnnoise-0.4 && \
-    ./autogen.sh && ./configure --enable-shared=no && make && \
-    cp .libs/librnnoise.a /usr/local/lib/ && \
-    cp src/rnnoise.h /usr/local/include/
-
-# Set working directory
 WORKDIR /app
+COPY server/requirements.txt /app/
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Install Python dependencies
-COPY server/requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && pip install -r /app/requirements.txt
-
-# Copy application code
 COPY server/app /app/app
-
-# Expose port and run app
 EXPOSE 8000
 CMD ["uvicorn", "app.main:api", "--host", "0.0.0.0", "--port", "8000"]
