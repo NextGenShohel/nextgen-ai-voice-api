@@ -23,16 +23,15 @@ async def enhance(file: UploadFile = File(...)):
 
 @api.post("/tts")
 async def tts(text: str = Form(...), voice: str = Form("f1")):
+    # base voice তৈরি
     tmp_in  = TMP / f"{uuid.uuid4()}.mp3"
     tmp_out = TMP / f"{uuid.uuid4()}_v.mp3"
-
-    # Save base voice (female) from gTTS
     gTTS(text=text, lang="bn").save(tmp_in)
 
-    # Define pitch for different voice options
+    # পিচ-ম্যাপ
     pitch = {"f1": 1.00, "f2": 1.12, "m1": 0.90, "m2": 0.80}.get(voice, 1.00)
 
-    # Apply pitch shift using FFmpeg
+    # FFmpeg পিচ শিফট
     subprocess.run([
         "ffmpeg", "-y", "-i", str(tmp_in),
         "-filter:a", f"asetrate=44100*{pitch},atempo={1/pitch}",
