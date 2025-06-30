@@ -1,18 +1,17 @@
-# পূর্ণ python ইমেজ ব্যবহার করি—বিল্ড টুল আগে থেকেই আছে
-FROM python:3.10
+FROM python:3.10-slim
 
-# সিস্টেম লাইব্রেরি; libsndfile -> soundfile কাজ করবে
-RUN apt-get update -y && apt-get install -y ffmpeg libsndfile1 && \
+# -------- system libs (BLAS/Fortran & ffmpeg & libsndfile) ----------
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+        build-essential gcc gfortran libopenblas-dev liblapack-dev \
+        libatlas-base-dev libsndfile1 ffmpeg curl && \
     rm -rf /var/lib/apt/lists/*
 
+# -------- Python deps ----------
 WORKDIR /app
+COPY server/requirements.txt .
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
-# requirements কপি ও ইনস্টল
-COPY server/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# অ্যাপের কোড কপি
+# -------- App code ----------
 COPY server/app ./app
 
 EXPOSE 8000
