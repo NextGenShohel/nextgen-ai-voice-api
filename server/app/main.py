@@ -2,27 +2,41 @@ from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import FileResponse
 import uuid, tempfile, soundfile as sf, numpy as np, noisereduce as nr
 from gtts import gTTS
+import subprocess
+from pathlib import Path
 
+TMP = Path(tempfile.gettempdir())
 api = FastAPI()
 
 @api.post("/enhance")
 async def enhance(file: UploadFile = File(...)):
-    # ইনপুট WAV পড়া
     raw = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
     raw.write(await file.read()); raw.close()
 
-    # ডেটা ও স্যাম্পল রেট লোড
     data, sr = sf.read(raw.name)
-    # প্রথম ½ সেকেন্ডকে noise হিসেবে ধরা
     reduced = nr.reduce_noise(y=data, sr=sr, y_noise=data[:sr//2])
 
-    # আউটপুট ফাইল
     out_path = raw.name.replace(".wav", "_clean.wav")
     sf.write(out_path, reduced.astype(np.float32), sr)
     return FileResponse(out_path, media_type="audio/wav", filename="enhanced.wav")
 
+
 @api.post("/tts")
-async def tts(text: str = Form(...)):
-    mp3_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
-    gTTS(text=text, lang="bn").save(mp3_path)
-    return FileResponse(mp3_path, media_type="audio/mpeg", filename="bn_tts.mp3")
+async def tts(text: str = Form(...), voice: str = Form("f1")):
+    tmp_in  = TMP / f"{uuid.uuid4()}.mp3"
+    tmp_out = TMP / f"{uuid.uuid4()}_v.mp3"
+
+    # Save base voice (female) from gTTS
+    gTTS(text=text, lang="bn").save(tmp_in)
+
+    # Define pitch for different voice options
+    pitch = {"f1": 1.00, "f2": 1.12, "m1": 0.90, "m2": 0.80}.get(voice, 1.00)
+
+    # Apply pitch shift using FFmpeg
+    subprocess.run([
+        "ffmpeg", "-y", "-i", str(tmp_in),
+        "-filter:a", f"asetrate=44100*{pitch},atempo={1/pitch}",
+        str(tmp_out)
+    ], check=True)
+
+    return FileResponse(tmp_out, media_type="audio/mpeg", filename="bn_tts.mp3")
